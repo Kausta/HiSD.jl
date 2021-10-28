@@ -35,8 +35,8 @@ Carefully check the first few (always two) lines in the label file which are dif
 Moreover, I first resize the images and save the resized versions as PNG files unlike the original implementation for faster data loading.
 When using the default config file, the images are resized into 128x128 images.
 ```
-julia --project . scripts/preprocess.jl --img_path $your_image_path --label_path $your_label_path --target_path datasets --start 3002 --end 30002
-julia --project . scripts/resize.jl --img_path $your_image_path --config ./configs/celeba-hq.yaml
+julia --project=. scripts/preprocess.jl --img_path $your_image_path --label_path $your_label_path --target_path datasets --start 3002 --end 30002
+julia --project=. scripts/resize.jl --img_path $your_image_path --config ./configs/celeba-hq.yaml
 ```
 Then you will get several ".txt" files in the "datasets/", each of them consists of lines of the absolute path of image and its tag-irrelevant conditions (Age and Gender by default).
 
