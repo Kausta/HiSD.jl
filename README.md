@@ -6,6 +6,40 @@ Unofficial Knet.jl implementation of paper "[Image-to-image Translation via Hier
 
 This version was implemented by Caner Korkmaz for the Koç University Comp 541 Course and ML Reproducibility Challenge 2021 Fall Edition. You can find the original implementation in [https://github.com/imlixinyang/HiSD](https://github.com/imlixinyang/HiSD).
 
+## Quick Start
+
+### Clone this repo:
+
+```
+git clone https://github.com/Kausta/HiSD.jl.git
+cd HiSD.jl/
+```
+
+### Download the dataset.
+
+We recommend you to download CelebA-HQ from [CelebAMask-HQ](https://github.com/switchablenorms/CelebAMask-HQ).
+Anyway you should get a dataset folder like:
+```
+celeba_or_celebahq
+ - img_dir
+   - img0
+   - img1
+   - ...
+ - train_label.txt
+```
+
+### Preprocess the dataset.
+
+In the paper, the first 3000 images are used as test set and remaining 27000 are used for training.
+Carefully check the first few (always two) lines in the label file which are different from others.
+Moreover, I first resize the images and save the resized versions as PNG files unlike the original implementation for faster data loading.
+When using the default config file, the images are resized into 128x128 images.
+```
+julia --project=. scripts/preprocess.jl --img_path $your_image_path --label_path $your_label_path --target_path datasets --start 3002 --end 30002
+julia --project=. scripts/resize.jl --img_path $your_image_path --config ./configs/celeba-hq.yaml
+```
+Then you will get several ".txt" files in the "datasets/", each of them consists of lines of the absolute path of image and its tag-irrelevant conditions (Age and Gender by default).
+
 ## License
 
 Following the licensing of the original implementation, this code is licensed under the CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike 4.0 International).
