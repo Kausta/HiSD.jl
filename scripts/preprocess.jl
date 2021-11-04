@@ -95,6 +95,8 @@ function main()
     @showprogress for line in lines 
         line = split(line)
         filename = joinpath(abspath(celeba_imgs), line[1])
+        # Resized versions are saved as png in my version
+        filename = replace(filename, ".jpg" => ".png")
 
         # Use only gender and age as tag-irrelevant conditions. Add other labels if you want.
         entry = "$(filename) $(line[GENDER_IDX]) $(line[AGE_IDX])"
