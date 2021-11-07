@@ -125,7 +125,7 @@ end
 export Linear
 struct Linear; w; b; end
 Linear(in_dim::Int, out_dim::Int) = Linear(param(out_ch,in_ch,init=kaiming_normal), param0(out_ch))
-(l::Linear)(x) = l.w * relu.(x) .+ l.b
+(l::Linear)(x) = l.w * x .+ l.b
 
 expand(N, i::Tuple) = i
 expand(N, i::Integer) = ntuple(_ -> i, N)
