@@ -1,68 +1,8 @@
 module Network
 
 using Knet
-using AutoGrad: AutoGrad, @primitive
-
-export kaiming_normal
-function kaiming_normal(a...) # mode="fan_in", nonlinearity="relu"
-    # implementation based on pytorch 1.0.1 kaiming normal
-    # same as the original paper
-    # only for mode="fan_in", nonlinearity="relu"
-    # since others are not needed
-    w = randn(a...)
-    
-    if ndims(w) == 1
-        fan_in = length(w)
-    elseif ndims(w) == 2
-        fan_in = size(w,2)
-    else
-        # if a is (3,3,16,8), then there are 16 input channels and 8 output channels
-        # fanin = 3*3*16 = (3*3*16*8) ÷ 8
-        # fanout = 3*3*8 = (3*3*16*8) ÷ 16
-        fan_in = div(length(w),  a[end])
-    end
-    fan = fan_in
-    gain = sqrt(2)
-    std = convert(eltype(w), gain / sqrt(fan))
-    return w .* std
-end
-
-export Chain
-struct Chain
-    layers
-    Chain(layers...) = new(layers)
-end
-(c::Chain)(x) = (for l in c.layers; x = l(x); end; x)
-
-export Conv
-struct Conv; w; b; p; s; end
-function Conv(in_ch::Int,out_ch::Int,ks::Int,padding::Int=0,stride::Int=1;bias::Bool=true) 
-    w = param(ks,ks,in_ch,out_ch,init=kaiming_normal)
-    b = nothing
-    if bias
-        b = param0(1,1,out_ch,1)
-    end
-    Conv(w, b, padding, stride)
-end
-function (c::Conv)(x) 
-    res = conv4(c.w, x, padding=c.p, stride=c.s) 
-    if !isnothing(c.b)
-        res = res .+ c.b
-    end
-    res
-end
-
-export avg_pool2d, AvgPool2d
-avg_pool2d(x,ks::Int) = pool(x, window=ks, stride=ks, padding=0, mode=1)
-struct AvgPool2d; ks::Int; end
-(a::AvgPool2d)(x) = avg_pool2d(x, a.ks)
-#TODO: AdaptiveAvgPool2d
-
-export leaky_relu, LeakyRelu
-#TODO: @primitive
-leaky_relu(x, alpha=0.2) = max.(0,x) .+ (min.(0,x) .* eltype(x)(alpha))
-struct LeakyRelu; alpha; end
-(l::LeakyRelu)(x) = leaky_relu(x, l.alpha)
+include("primitives.jl")
+using .Primitives
 
 export DownBlock
 struct DownBlock; conv1; conv2; sc; activ; end
@@ -74,14 +14,17 @@ function (d::DownBlock)(x)
     return (residual + out) / sqrt(2)  
 end
 
-#TODO: DownBlockIN
-
-export upsample2d, Upsample2d
-#TODO: NNLib upsample_nearest, ∇upsample_nearest with @primitive1 for 2d nearest interpolation
-# unpool is temporary
-upsample2d(x,sf::Int) = unpool(x, window=sf, stride=sf, padding=0, mode=1)
-struct Upsample2d; sf::Int; end
-(u::Upsample2d)(x) = upsample2d(x, u.sf)
+export DownBlockIN
+struct DownBlockIN; conv1; conv2; in1; in2; sc; activ; end
+DownBlockIN(in_ch::Int,out_ch::Int) = 
+    DownBlockIN(Conv(in_ch, in_ch, 3, 1), Conv(in_ch, out_ch, 3, 1), 
+                InstanceNorm2d(in_ch), InstanceNorm2d(in_ch),
+                Conv(in_ch, out_ch, 1, 0, bias=false), LeakyRelu(0.2))
+function (d::DownBlockIN)(x)
+    residual = avg_pool2d(d.sc(x), 2)
+    out = d.conv2(d.activ(d.in2(avg_pool2d(d.conv1(d.activ(d.in1(x))), 2))))
+    return (residual + out) / sqrt(2)  
+end
 
 export UpBlock
 struct UpBlock; conv1; conv2; sc; activ; end
@@ -93,23 +36,36 @@ function (d::UpBlock)(x)
     return (residual + out) / sqrt(2)  
 end
 
-#TODO: UpBlockIN
-
-export MiddleBlock
-#TODO: AdaptiveInstanceNorm2d for Middle Block
-struct MiddleBlock; conv1; conv2; sc; activ; end
-MiddleBlock(in_ch::Int,out_ch::Int) = 
-    MiddleBlock(Conv(in_ch, out_ch, 3, 1), Conv(out_ch, out_ch, 3, 1), Conv(in_ch, out_ch, 1, 0, bias=false), LeakyRelu(0.2))
-function (d::MiddleBlock)(x)
-    residual = d.sc(x)
-    out = d.conv2(d.activ(d.conv1(d.activ(x))))
+export UpBlockIn
+struct UpBlockIn; conv1; conv2; in1; in2; sc; activ; end
+UpBlockIn(in_ch::Int,out_ch::Int) = 
+    UpBlockIn(Conv(in_ch, out_ch, 3, 1), Conv(out_ch, out_ch, 3, 1), 
+              InstanceNorm2d(in_ch), InstanceNorm2d(out_ch),
+              Conv(in_ch, out_ch, 1, 0, bias=false), LeakyRelu(0.2))
+function (d::UpBlockIn)(x)
+    residual = upsample2d(d.sc(x), 2)
+    out = d.conv2(d.activ(d.in2(d.conv1(upsample2d(d.activ(d.in1(x)), 2)))))
     return (residual + out) / sqrt(2)  
 end
 
-export Linear
-struct Linear; w; b; end
-Linear(in_dim::Int, out_dim::Int) = Linear(param(out_ch,in_ch,init=kaiming_normal), param0(out_ch))
-(l::Linear)(x) = l.w * relu.(x) .+ l.b
+
+export MiddleBlock, num_adain_params, assign_adain_params
+struct MiddleBlock; conv1; conv2; adain1; adain2; sc; activ; end
+MiddleBlock(in_ch::Int,out_ch::Int) = 
+    MiddleBlock(Conv(in_ch, out_ch, 3, 1), Conv(out_ch, out_ch, 3, 1), 
+                AdaptiveInstanceNorm2d(in_ch), AdaptiveInstanceNorm2d(out_ch),
+                Conv(in_ch, out_ch, 1, 0, bias=false), LeakyRelu(0.2))
+function (d::MiddleBlock)(x)
+    residual = d.sc(x)
+    out = d.conv2(d.activ(d.adain2(d.conv1(d.activ(d.adain1(x))))))
+    return (residual + out) / sqrt(2)  
+end
+Primitives.num_adain_params(d::MiddleBlock) = num_adain_params(d.adain1) + num_adain_params(d.adain2)
+function Primitives.assign_adain_params(d::MiddleBlock, params)
+    params = assign_adain_params(d.adain1, params)
+    params = assign_adain_params(d.adain2, params)
+    return params
+end
 
 #TODO: Extractor, Translator and Mapper
 #TODO: Generator, Discriminator
