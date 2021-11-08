@@ -91,8 +91,9 @@ function (i::InstanceNorm2d)(x)
     x = reshape(x, (h * w, c, n))
     bias_in = mean(x, dims=1)
     weight_in = std(x, mean=bias_in, dims=1)
+    eps = eltype(x)(i.eps)
     
-    out = ((x .- bias_in) ./ (weight_in .+ i.eps)) .* i.weight .+ i.bias
+    out = ((x .- bias_in) ./ (weight_in .+ eps)) .* i.weight .+ i.bias
     return reshape(out, (h, w, c, n))
 end
 
@@ -117,17 +118,30 @@ function (i::AdaptiveInstanceNorm2d)(x)
     x = reshape(x, (h * w, c, n))
     bias_in = mean(x, dims=1)
     weight_in = std(x, mean=bias_in, dims=1)
+    eps = eltype(x)(i.eps)
     
-    out = ((x .- bias_in) ./ (weight_in .+ i.eps)) .* i.weight .+ i.bias
+    out = ((x .- bias_in) ./ (weight_in .+ eps)) .* i.weight .+ i.bias
     return reshape(out, (h, w, c, n))
+end
+
+num_adain_params(i::Any) = 0
+assign_adain_params(i::Any, params) = params
+
+num_adain_params(i::Chain) = sum(num_adain_params.(i.layers))
+function assign_adain_params(i::Chain, params)
+    for l in i.layers
+        params = assign_adain_params(l, params)
+    end
+    params
 end
 
 export Linear
 struct Linear; w; b; end
-Linear(in_dim::Int, out_dim::Int) = Linear(param(out_ch,in_ch,init=kaiming_normal), param0(out_ch))
+Linear(in_dim::Int, out_dim::Int) = Linear(param(out_dim,in_dim,init=kaiming_normal), param0(out_dim))
 (l::Linear)(x) = l.w * x .+ l.b
 
-expand(N, i::Tuple) = i
-expand(N, i::Integer) = ntuple(_ -> i, N)
+export Sigmoid
+struct Sigmoid; end
+(s::Sigmoid)(x) = sigm(x)
 
 end
