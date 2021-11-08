@@ -2,6 +2,7 @@
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+GPUArrays = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
 Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 Knet = "1902f260-5fb4-5aff-8c31-6271790ab950"

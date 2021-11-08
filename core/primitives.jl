@@ -3,6 +3,8 @@ module Primitives
 using Knet
 using Statistics: mean, std
 
+atype = Knet.atype()
+
 export kaiming_normal
 function kaiming_normal(a...) # mode="fan_in", nonlinearity="relu"
     # implementation based on pytorch 1.0.1 kaiming normal
@@ -37,10 +39,10 @@ end
 export Conv
 struct Conv; w; b; p; s; end
 function Conv(in_ch::Int,out_ch::Int,ks::Int,padding::Int=0,stride::Int=1;bias::Bool=true) 
-    w = param(ks,ks,in_ch,out_ch,init=kaiming_normal)
+    w = param(ks,ks,in_ch,out_ch,init=kaiming_normal,atype=atype)
     b = nothing
     if bias
-        b = param0(1,1,out_ch,1)
+        b = param0(1,1,out_ch,1,atype=atype)
     end
     Conv(w, b, padding, stride)
 end
@@ -137,11 +139,27 @@ end
 
 export Linear
 struct Linear; w; b; end
-Linear(in_dim::Int, out_dim::Int) = Linear(param(out_dim,in_dim,init=kaiming_normal), param0(out_dim))
+Linear(in_dim::Int, out_dim::Int) = Linear(param(out_dim,in_dim,init=kaiming_normal,atype=atype), param0(out_dim,atype=atype))
 (l::Linear)(x) = l.w * x .+ l.b
 
 export Sigmoid
 struct Sigmoid; end
 (s::Sigmoid)(x) = sigm(x)
+
+export tile_like
+function tile_like(x, target)
+    # reshape and repeat x so that it can be concatenated with target at dim 3. (HWCN)
+    x = Knet.mat(x)
+    x = reshape(x, (1, 1, size(x)...)) 
+    if size(target)[1] == 1 && size(target)[2] == 1
+        return x
+    end
+    # Current CUDA.jl implementation causes scalar indexing
+    # x = KnetArray(repeat_cu4(CuArray(x), size(target)[1], size(target)[2]))
+    # So just simulate it with nearest interpolation
+    x = upsample2d(x, (size(target)[1], size(target)[2]))
+    return x
+end
+
 
 end

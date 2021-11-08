@@ -32,12 +32,12 @@ function prepare_sub_folder(out_dir)
     return output_directory, image_directory, checkpoint_directory, logs_directory
 end
 
-function get_train_dataset(attr, transformation, batchsize, data_root; shuffle=true)
+function get_train_dataset(attr, transformation, batchsize, data_root; shuffle=true, atype=Knet.atype())
     dataset = Data.ImageDataset(data_root, attr, transformation)
-    return Cycle(Data.minibatch(dataset, batchsize, Knet.atype(), shuffle=shuffle))
+    return Cycle(Data.minibatch(dataset, batchsize, atype, shuffle=shuffle))
 end
 
-function get_train_datasets(config, data_root)
+function get_train_datasets(config, data_root; atype=Knet.atype())
     tags = config["tags"]
     transformation = Transformations.Compose(
         Transformations.ColorJitter(0.1, 0.1, 0.1, 0.1),
@@ -45,7 +45,7 @@ function get_train_datasets(config, data_root)
         Transformations.to_tensor,
         Transformations.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     )
-    datasets = [[get_train_dataset(attrib["filename"], transformation, config["batch_size"], data_root, shuffle=true) 
+    datasets = [[get_train_dataset(attrib["filename"], transformation, config["batch_size"], data_root, shuffle=true, atype=atype) 
             for attrib in tag["attributes"]] for tag in tags] 
     return datasets
 end
