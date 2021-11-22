@@ -1,5 +1,3 @@
-module Transformations
-
 export Resize, RandomCrop, RandomHorizontalFlip, to_tensor, Normalize, ColorJitter, Compose
 
 using Images, Interpolations
@@ -63,7 +61,7 @@ function (r::RandomHorizontalFlip)(x)
 end
 
 function to_tensor(x)
-    return x |> channelview
+    return Float32.(x |> channelview)
 end
 
 struct Normalize
@@ -159,5 +157,3 @@ struct Compose
     Compose(transformations...) = new(transformations)
 end
 (c::Compose)(x) = (for t in c.transformations; x = t(x); end; x)
-
-end

@@ -1,5 +1,3 @@
-module Data
-
 using Images
 using Images.FileIO
 import Base: iterate, eltype, length, rand, repeat, summary, show
@@ -7,6 +5,7 @@ using Base: @propagate_inbounds, tail
 using Random: randperm
 
 export ImageData, ImageDataset, ImageDatasetBatch, minibatch
+export load_test_image, save_test_image
 
 struct ImageData; filename::String; gender::Int; age::Int; end
 
@@ -83,6 +82,4 @@ function save_test_image(filename, xs)
     image = image .* 0.5 .+ 0.5
     image = image .|> N0f8 |> colorview(RGB)
     FileIO.save(filename, image)
-end
-
 end
