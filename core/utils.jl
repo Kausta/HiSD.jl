@@ -1,13 +1,7 @@
-module Utils
-
 export load_config, create_dir!, prepare_sub_folder, get_train_datasets
 
 using YAML: load_file
 using Base.Iterators: Cycle
-using Knet
-include("data.jl")
-include("transformations.jl")
-using .Data, .Transformations
 
 function load_config(path)
     load_file(path)
@@ -33,21 +27,19 @@ function prepare_sub_folder(out_dir)
 end
 
 function get_train_dataset(attr, transformation, batchsize, data_root; shuffle=true, atype=Knet.atype())
-    dataset = Data.ImageDataset(data_root, attr, transformation)
-    return Cycle(Data.minibatch(dataset, batchsize, atype, shuffle=shuffle))
+    dataset = ImageDataset(data_root, attr, transformation)
+    return Cycle(minibatch(dataset, batchsize, atype, shuffle=shuffle))
 end
 
 function get_train_datasets(config, data_root; atype=Knet.atype())
     tags = config["tags"]
-    transformation = Transformations.Compose(
-        Transformations.ColorJitter(0.1, 0.1, 0.1, 0.1),
-        Transformations.RandomHorizontalFlip(0.5),
-        Transformations.to_tensor,
-        Transformations.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+    transformation = Compose(
+        ColorJitter(0.1, 0.1, 0.1, 0.1),
+        RandomHorizontalFlip(0.5),
+        to_tensor,
+        Normalize(Float32.([0.5, 0.5, 0.5]), Float32.([0.5, 0.5, 0.5]))
     )
     datasets = [[get_train_dataset(attrib["filename"], transformation, config["batch_size"], data_root, shuffle=true, atype=atype) 
             for attrib in tag["attributes"]] for tag in tags] 
     return datasets
-end
-
 end

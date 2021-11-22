@@ -1,9 +1,6 @@
-module Primitives
-
-using Knet
 using Statistics: mean, std
-
-atype = Knet.atype()
+using AutoGrad: AutoGrad, @primitive
+using Base.Iterators
 
 export kaiming_normal
 function kaiming_normal(a...) # mode="fan_in", nonlinearity="relu"
@@ -11,7 +8,7 @@ function kaiming_normal(a...) # mode="fan_in", nonlinearity="relu"
     # same as the original paper
     # only for mode="fan_in", nonlinearity="relu"
     # since others are not needed
-    w = randn(a...)
+    w = randn(Float32, a...)
     
     if ndims(w) == 1
         fan_in = length(w)
@@ -36,6 +33,10 @@ struct Chain
 end
 (c::Chain)(x) = (for l in c.layers; x = l(x); end; x)
 
+export paramlist
+paramlist(c::Chain) = Iterators.flatten(paramlist.(c.layers))
+paramlist(c::Any) = []
+
 export Conv
 struct Conv; w; b; p; s; end
 function Conv(in_ch::Int,out_ch::Int,ks::Int,padding::Int=0,stride::Int=1;bias::Bool=true) 
@@ -53,6 +54,7 @@ function (c::Conv)(x)
     end
     res
 end
+paramlist(c::Conv) = isnothing(c.b) ? [c.w] : [c.w, c.b]
 
 export avg_pool2d, AvgPool2d
 avg_pool2d(x,ks) = pool(x, window=ks, stride=ks, padding=0, mode=1)
@@ -81,13 +83,14 @@ struct Upsample2d; sf; end
 (u::Upsample2d)(x) = upsample2d(x, u.sf)
 
 export leaky_relu, LeakyRelu
-leaky_relu(x, alpha=0.2) = max.(0,x) .+ (min.(0,x) .* eltype(x)(alpha))
+
+leaky_relu(x, alpha=0.2) = relu.(x) .- relu.(-x) .* alpha
 struct LeakyRelu; alpha; end
-(l::LeakyRelu)(x) = leaky_relu(x, l.alpha)
+(l::LeakyRelu)(x) = leaky_relu(x, Float32(l.alpha))
 
 export InstanceNorm2d
 struct InstanceNorm2d; weight; bias; num_features::Int; eps; end
-InstanceNorm2d(num_features; eps=1e-5) = InstanceNorm2d(param(ones(1, num_features, 1)), param0(1, num_features, 1), num_features, eps)
+InstanceNorm2d(num_features; eps=1e-5) = InstanceNorm2d(param(ones(1, num_features, 1),atype=atype), param0(1, num_features, 1, atype=atype), num_features, eps)
 function (i::InstanceNorm2d)(x)
     h, w, c, n = size(x)
     x = reshape(x, (h * w, c, n))
@@ -98,6 +101,7 @@ function (i::InstanceNorm2d)(x)
     out = ((x .- bias_in) ./ (weight_in .+ eps)) .* i.weight .+ i.bias
     return reshape(out, (h, w, c, n))
 end
+paramlist(c::InstanceNorm2d) = [c.weight, c.bias]
 
 
 export AdaptiveInstanceNorm2d, num_adain_params, assign_adain_params
@@ -141,25 +145,8 @@ export Linear
 struct Linear; w; b; end
 Linear(in_dim::Int, out_dim::Int) = Linear(param(out_dim,in_dim,init=kaiming_normal,atype=atype), param0(out_dim,atype=atype))
 (l::Linear)(x) = l.w * x .+ l.b
+paramlist(l::Linear) = [l.w, l.b]
 
 export Sigmoid
 struct Sigmoid; end
-(s::Sigmoid)(x) = sigm(x)
-
-export tile_like
-function tile_like(x, target)
-    # reshape and repeat x so that it can be concatenated with target at dim 3. (HWCN)
-    x = Knet.mat(x)
-    x = reshape(x, (1, 1, size(x)...)) 
-    if size(target)[1] == 1 && size(target)[2] == 1
-        return x
-    end
-    # Current CUDA.jl implementation causes scalar indexing
-    # x = KnetArray(repeat_cu4(CuArray(x), size(target)[1], size(target)[2]))
-    # So just simulate it with nearest interpolation
-    x = upsample2d(x, (size(target)[1], size(target)[2]))
-    return x
-end
-
-
-end
+(s::Sigmoid)(x) = sigm.(x)
