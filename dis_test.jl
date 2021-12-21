@@ -21,6 +21,10 @@ println("Loaded config")
 datasets = get_train_datasets(config, DATA_ROOT, atype=KnetArray{Float32})
 println("Loaded $(sum(length.(datasets))) datasets")
 
+function minimal()
+
+end
+
 function generator_out(tr, x, y)
     outs = GenOutputs()
     loss_gen_total = tr(outs, x, y, 1, 1, 2, mode="gen")

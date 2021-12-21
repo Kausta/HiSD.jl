@@ -21,7 +21,11 @@ CONFIG_FILE = "/kuacc/users/ckorkmaz16/HiSD.jl/configs/celeba-hq.yaml"
 config = load_config(CONFIG_FILE)
 println("Loaded config")
 
-trainer = Knet.load(joinpath(DATA_ROOT, "outputs", "checkpoint.jld2"), "trainer")
+model_dt = "2021-12-10_20-18-35"
+MODEL_DIR = joinpath(DATA_ROOT, "models", model_dt)
+CHECKPOINT_FILE = joinpath(MODEL_DIR, "checkpoint.jld2")
+
+trainer, PREV_ITERS = Knet.load(CHECKPOINT_FILE, "trainer", "iters")
 
 function inference(model, x, steps, transform, noise_dim)
     c = encode(model, x)
@@ -29,7 +33,7 @@ function inference(model, x, steps, transform, noise_dim)
     for step in steps
         if step["type"] == "latent-guided"
             z = convert(KnetArray{Float32}, randn(Float32, noise_dim, 1))
-            s_trg = map(model, z, step["tag"], step["attribute"])
+            s_trg = HiSDCore.map(model, z, step["tag"], step["attribute"])
         elseif step["type"] == "reference-guided"
             reference_idx = rand(1:length(step["reference"]))
             img = load_test_image(step["reference"][reference_idx], transform, Knet.atype())
@@ -59,8 +63,9 @@ function test(model, config, steps, input_path, output_path)
 end
 
 curr_dt = Dates.format(now(), "yyyy-mm-dd_HH-MM-SS")
-LATENT_REALISM_DIR = joinpath(DATA_ROOT, "outputs", "model", "$(curr_dt)", "latent_realism")
-LATENT_DISENTANGLEMENT_DIR = joinpath(DATA_ROOT, "outputs", "model", "$(curr_dt)", "latent_disentanglement")
+OUTPUT_DIR = joinpath(DATA_ROOT, "outputs", "model_$(model_dt)", "e$(PREV_ITERS)_$(curr_dt)")
+LATENT_REALISM_DIR = joinpath(OUTPUT_DIR, "latent_realism")
+LATENT_DISENTANGLEMENT_DIR = joinpath(OUTPUT_DIR, "latent_disentanglement")
 
 DATASET_PATH = joinpath(DATA_ROOT, "datasets_test")
 WITHOUT_BANGS = joinpath(DATASET_PATH, "Bangs_without.txt")
@@ -85,7 +90,7 @@ TEST_IN_PATH = joinpath(LATENT_REALISM_DIR, "without_bangs")
 for i in 1:5
     test_out_path =  joinpath(LATENT_REALISM_DIR, "out_$(i)")
     create_dir!(test_out_path)
-    steps = [Dict("type" => "latent-guided", "tag" => 0, "attribute" => 0)]
+    steps = [Dict("type" => "latent-guided", "tag" => 1, "attribute" => 1)]
     test(trainer.gen_test, config, steps, TEST_IN_PATH, test_out_path)
 end
 
@@ -111,12 +116,12 @@ TEST_IN_PATH = joinpath(LATENT_DISENTANGLEMENT_DIR, "without_bangs")
 for i in 1:5
     test_out_path =  joinpath(LATENT_DISENTANGLEMENT_DIR, "out_$(i)")
     create_dir!(test_out_path)
-    steps = [Dict("type" => "latent-guided", "tag" => 0, "attribute" => 0)]
+    steps = [Dict("type" => "latent-guided", "tag" => 1, "attribute" => 1)]
     test(trainer.gen_test, config, steps, TEST_IN_PATH, test_out_path)
 end
 
-REFERENCE_REALISM_DIR = joinpath(DATA_ROOT, "outputs", "model", "$(curr_dt)", "reference_realism")
-REFERENCE_DISENTANGLEMENT_DIR = joinpath(DATA_ROOT, "outputs", "model", "$(curr_dt)", "reference_disentanglement")
+REFERENCE_REALISM_DIR = joinpath(OUTPUT_DIR, "reference_realism")
+REFERENCE_DISENTANGLEMENT_DIR = joinpath(OUTPUT_DIR, "reference_disentanglement")
 
 DATASET_TRAIN_PATH = joinpath(DATA_ROOT, "datasets", "Bangs_with.txt")
 DATASET_TEST_PATH = joinpath(DATA_ROOT, "datasets_test", "Bangs_with.txt")
@@ -154,7 +159,7 @@ TEST_IN_PATH = joinpath(REFERENCE_REALISM_DIR, "without_bangs")
 for i in 1:5
     test_out_path =  joinpath(REFERENCE_REALISM_DIR, "out_$(i)")
     create_dir!(test_out_path)
-    steps = [Dict("type" => "reference-guided", "tag" => 0, "reference" => references_with_bangs)]
+    steps = [Dict("type" => "reference-guided", "tag" => 1, "reference" => references_with_bangs)]
     test(trainer.gen_test, config, steps, TEST_IN_PATH, test_out_path)
 end
 
@@ -180,6 +185,6 @@ TEST_IN_PATH = joinpath(REFERENCE_DISENTANGLEMENT_DIR, "without_bangs")
 for i in 1:5
     test_out_path =  joinpath(REFERENCE_DISENTANGLEMENT_DIR, "out_$(i)")
     create_dir!(test_out_path)
-    steps = [Dict("type" => "reference-guided", "tag" => 0, "reference" => references_with_bangs)]
+    steps = [Dict("type" => "reference-guided", "tag" => 1, "reference" => references_with_bangs)]
     test(trainer.gen_test, config, steps, TEST_IN_PATH, test_out_path)
 end

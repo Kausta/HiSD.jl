@@ -220,7 +220,7 @@ function (d::Discriminator)(x, #=s,=# y, i)
     f = reshape(f, (prod(size(f)) ÷ B, B))
     y = reshape(y, (prod(size(y)) ÷ B, B))
     fsy = vcat(f, #= s, =# y)
-    fsy = reshape(fsy, (1,1,size(fsy)[1], B))
+    fsy = reshape(fsy, (1, 1, size(fsy)[1], B))
     out = d.fcs[i](fsy)
     so = size(out)
     return reshape(out, (prod(so) ÷ (2*so[end]), 2, so[end]))
@@ -235,13 +235,13 @@ function dis_loss_real(d::Discriminator, x, y, i, j)
     # Expected functionality: loss += grad(out[1, :], x) + grad(out[1, :], x)
     # Below is commented as it does not work in this form (or without @diffs)
     # due to cat/uncat
-    # x = Param(x)
-    # gout1 = grad(t -> sum(d(t, y, i)[j, 1, :]))
-    # gout1_grad = gout1(Param(x))
-    # loss += sum(abs2.(gout1_grad)) / size(x)[end]
-    # gout2 = grad(t -> sum(d(t, y, i)[j, 2, :]))
-    # gout2_grad = gout2(Param(x))
-    # loss += sum(abs2.(gout2_grad)) / size(x)[end]
+    xp = Param(x)
+    gout1 = @diff sum(d(xp, y, i)[j, 1, :])
+    gout1_grad = grad(gout1, xp)
+    loss += sum(abs2.(gout1_grad)) / size(x)[end]
+    gout2 = @diff sum(d(xp, y, i)[j, 2, :])
+    gout2_grad = grad(gout2, xp)
+    loss += sum(abs2.(gout2_grad)) / size(x)[end]
     return loss
 end
 function dis_loss_fake_trg(d::Discriminator, x, y, i, j)

@@ -5,7 +5,7 @@ using Base: @propagate_inbounds, tail
 using Random: randperm
 
 export ImageData, ImageDataset, ImageDatasetBatch, minibatch
-export load_test_image, save_test_image
+export load_test_image, save_test_image, write_2images
 
 struct ImageData; filename::String; gender::Int; age::Int; end
 
@@ -75,11 +75,27 @@ function load_test_image(filename, transformation, atype)
     return xs
 end
 
-function save_test_image(filename, xs)
+function _convert_test_image(xs)
     xs = permutedims(xs, [4, 3, 1, 2])
     image = reshape(xs, size(xs)[2:end]...)
     image = convert(Array, image)    
     image = image .* 0.5 .+ 0.5
+    clamp!(image, 0.0, 1.0)
     image = image .|> N0f8 |> colorview(RGB)
+    return image
+end
+
+function save_test_image(filename, xs)
+    image = _convert_test_image(xs)
     FileIO.save(filename, image)
+end
+
+function _write_images(image_outputs, display_image_num, file_name)
+    image_outputs = vcat([[_convert_test_image(images[:,:,:,i:i]) for i in 1:size(images)[4]] for images in image_outputs]...)
+    view = mosaicview(image_outputs..., nrow=display_image_num, npad=1)
+    FileIO.save(file_name, view)
+end
+
+function write_2images(image_outputs, display_image_num, image_directory, postfix)
+    _write_images(image_outputs, display_image_num, joinpath(image_directory, "gen_$(postfix).jpg"))
 end
