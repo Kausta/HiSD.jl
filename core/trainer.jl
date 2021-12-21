@@ -51,7 +51,7 @@ function gen_losses(h::HiSD, outs, x, y, i, j, j_trg)
     
     loss_gen_sty = mean(abs.(s_trg_rec - s_trg))
 
-    loss_gen_rec = mean(abs.(x_rec - x)) + mean(abs.(x_slf - x)) + mean(abs.(x_cyc-  x))
+    loss_gen_rec = mean(abs.(x_rec - x)) + mean(abs.(x_slf - x)) + mean(abs.(x_cyc - x))
     
     loss_gen_total = h.config["adv_w"] * loss_gen_adv + h.config["sty_w"] * loss_gen_sty + h.config["rec_w"] * loss_gen_rec
     # println("Loss calc")
@@ -77,8 +77,7 @@ function HiSDTrainer(config)
     hisd = HiSD(config)
     beta1 = config["beta1"]
     beta2 = config["beta2"]
-    # gclip = 100
-    gclip = 1 # until gradient penalty/r1 reg is fixed
+    gclip = 100
     opt_gen_others = Adam(lr=config["lr_gen_others"], beta1=beta1, beta2=beta2, gclip=gclip)
     opt_gen_mappers = Adam(lr=config["lr_gen_mappers"], beta1=beta1, beta2=beta2, gclip=gclip)
     opt_dis = Adam(lr=config["lr_dis"], beta1=beta1, beta2=beta2, gclip=gclip)
@@ -100,12 +99,13 @@ function update(trainer::HiSDTrainer, x, y, i, j, j_trg)
     outs = GenOutputs()
     loss_gen_total = @diff trainer.hisd(outs, x, y, i, j, j_trg, mode="gen")
     outs = to_val(outs)
-    for p in AutoGrad.params(loss_gen_total)
+    for p in paramlist(trainer.hisd.gen)
         update!(p, grad(loss_gen_total, p))
     end
     loss_gen_total = nothing
+    GC.gc(true)
     loss_dis_total = @diff trainer.hisd(x, outs.x_trg, outs.x_cyc, y, i, j, j_trg, mode="dis")
-    for p in AutoGrad.params(loss_dis_total)
+    for p in paramlist(trainer.hisd.dis)
         update!(p, grad(loss_dis_total, p))
     end
     loss_dis_total = value(loss_dis_total)
@@ -130,13 +130,13 @@ function sample(trainer::HiSDTrainer, x, x_trg, j, j_trg, i)
     e = encode(gen, x)
 
     # Latent-guided 1 
-    z = repeat(convert(atype, randn(trainer.hisd.noise_dim, 1)), 1, B)
+    z = convert(atype, repeat(randn(trainer.hisd.noise_dim, 1), 1, B))
     s_trg = map(gen, z, i, j_trg)
     x_trg_ = decode(gen, translate(gen, e, s_trg, i))
     push!(out, x_trg_)
 
     # Latent-guided 2
-    z = repeat(convert(atype, randn(trainer.hisd.noise_dim, 1)), 1, B)
+    z = convert(atype, repeat(randn(trainer.hisd.noise_dim, 1), 1, B))
     s_trg = map(gen, z, i, j_trg)
     x_trg_ = decode(gen, translate(gen, e, s_trg, i))
     push!(out, x_trg_)
@@ -148,8 +148,8 @@ function sample(trainer::HiSDTrainer, x, x_trg, j, j_trg, i)
     push!(out, x_trg_)
 
     # Reference-guided 2: use x_trg[n, n-1, ..., 0] as reference
-    x_trg_ = decode(gen, translate(gen, e, reverse(s_trg, dims=length(size(s_trg))), i))
-    push!(out, reverse(x_trg, dims=length(size(x_trg))))
+    x_trg_ = decode(gen, translate(gen, e, s_trg[:,end:-1:1], i))
+    push!(out, x_trg[:,:,:,end:-1:1])
     push!(out, x_trg_)
 
     return out

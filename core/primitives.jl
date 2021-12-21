@@ -76,6 +76,11 @@ end
 struct AdaptiveAvgPool2d; os; end;
 (a::AdaptiveAvgPool2d)(x) = adaptive_avg_pool2d(x, a.os)
 
+export global_avg_pool2d, GlobalAvgPool2d
+global_avg_pool2d(x) = mean(x, dims=(1,2))
+struct GlobalAvgPool2d; end
+(g::GlobalAvgPool2d)(x) = global_avg_pool2d(x)
+
 export upsample2d, Upsample2d
 # Nearest neighbor upsampling
 upsample2d(x,sf) = unpool(x, window=sf, stride=sf, padding=0, mode=1)
